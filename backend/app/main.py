@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from app.config import settings
 from app.database import init_db
+from app.scheduler.manager import scheduler_manager
 
 
 @asynccontextmanager
@@ -15,9 +16,16 @@ async def lifespan(app: FastAPI):
     await init_db()
     print("Database initialized")
     
+    # Initialize and start scheduler
+    scheduler_manager.init_scheduler()
+    scheduler_manager.start()
+    print("Scheduler initialized and started")
+    
     yield
     
     # Shutdown
+    scheduler_manager.shutdown()
+    print("Scheduler shut down")
     print("Shutting down application")
 
 
@@ -59,12 +67,9 @@ async def health_check():
 
 
 # Include routers
-from app.routers import auth, files, admin
+from app.routers import auth, files, admin, scheduler
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(files.router, prefix="/api/v1/files", tags=["Files"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
-
-# TODO: Add more routers
-# from app.routers import scheduler
-# app.include_router(scheduler.router, prefix="/api/v1/scheduler", tags=["scheduler"])
+app.include_router(scheduler.router, prefix="/api/v1/scheduler", tags=["Scheduler"])
