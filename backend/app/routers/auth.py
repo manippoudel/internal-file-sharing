@@ -38,10 +38,33 @@ async def login(
     )
     
     if not user or not token:
+        # Log failed login attempt
+        from app.services.audit_service import AuditService
+        await AuditService.log_action(
+            db=db,
+            user_id=None,
+            action="login_failed",
+            ip_address=client_ip,
+            user_agent=user_agent,
+            details={"username": login_data.username, "reason": message}
+        )
+        await db.commit()
+        
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=message
         )
+    
+    # Log successful login
+    from app.services.audit_service import AuditService
+    await AuditService.log_action(
+        db=db,
+        user_id=user.id,
+        action="login",
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
+    await db.commit()
     
     return LoginResponse(
         success=True,
@@ -57,7 +80,9 @@ async def login(
 @router.post("/logout")
 async def logout(
     authorization: Optional[str] = Header(None),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    client_ip: str = Depends(get_client_ip),
+    user_agent: Optional[str] = Header(None)
 ):
     """User logout endpoint"""
     if not authorization:
@@ -68,7 +93,28 @@ async def logout(
         return {"success": False, "message": "Invalid token format"}
     
     token = parts[1]
+    
+    # Get user before logout for audit log
+    from app.routers.dependencies import get_current_user
+    try:
+        user = await AuthService.validate_session(db, token)
+        user_id = user.id if user else None
+    except:
+        user_id = None
+    
     success = await AuthService.logout(db, token)
+    
+    # Log logout
+    if success and user_id:
+        from app.services.audit_service import AuditService
+        await AuditService.log_action(
+            db=db,
+            user_id=user_id,
+            action="logout",
+            ip_address=client_ip,
+            user_agent=user_agent
+        )
+        await db.commit()
     
     return {
         "success": success,
