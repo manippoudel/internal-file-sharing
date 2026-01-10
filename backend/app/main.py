@@ -58,9 +58,13 @@ async def health_check():
     }
 
 
-# TODO: Add routers
-# from app.routers import auth, files, admin, scheduler
-# app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+# Include routers
+from app.routers import auth
+
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+
+# TODO: Add more routers
+# from app.routers import files, admin, scheduler
 # app.include_router(files.router, prefix="/api/v1/files", tags=["files"])
 # app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 # app.include_router(scheduler.router, prefix="/api/v1/scheduler", tags=["scheduler"])
