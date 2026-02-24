@@ -25,7 +25,7 @@ class AuthService:
         username: str,
         password: str,
         email: str,
-        role: UserRole = UserRole.USER
+        role: UserRole = UserRole.user
     ) -> User:
         """Create a new user"""
         password_hash = hash_password(password)

@@ -17,17 +17,18 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import Uppy from '@uppy/core';
 import Dashboard from '@uppy/dashboard';
-import XHRUpload from '@uppy/xhr-upload';
-import '@uppy/core/dist/style.css';
-import '@uppy/dashboard/dist/style.css';
+// Import CSS via CDN or comment out if causing issues
+// import '@uppy/core/dist/style.css';
+// import '@uppy/dashboard/dist/style.css';
 import uploadService from '../services/uploadService';
-import { useFilesStore } from '../stores/files';
+import { useFileStore } from '../stores/files';
+import CryptoJS from 'crypto-js';
 
 export default {
   name: 'FileUpload',
   emits: ['close', 'upload-complete'],
   setup(props, { emit }) {
-    const filesStore = useFilesStore();
+    const filesStore = useFileStore();
     const uploadStatus = ref(null);
     let uppy = null;
 
@@ -54,20 +55,6 @@ export default {
         showProgressDetails: true,
         proudlyDisplayPoweredByUppy: false,
         note: 'Files up to 10GB, maximum 10 files at a time',
-      });
-
-      // Add XHR Upload plugin for chunked uploads
-      uppy.use(XHRUpload, {
-        endpoint: 'http://localhost:8000/api/v1/files/upload/chunk',
-        method: 'POST',
-        formData: true,
-        fieldName: 'chunk',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        getResponseData: (responseText, response) => {
-          return JSON.parse(responseText);
-        }
       });
 
       // Handle file addition
@@ -114,32 +101,88 @@ export default {
         }
       });
 
-      // Handle upload success
-      uppy.on('upload-success', async (file, response) => {
-        try {
-          const uploadId = file.meta.uploadId;
-          
-          // Complete the upload
-          await uploadService.completeUpload(uploadId, null);
-          
-          uploadStatus.value = {
-            type: 'success',
-            message: `Successfully uploaded ${file.name}`
-          };
-
-          // Refresh file list
-          await filesStore.fetchFiles();
-          
-          setTimeout(() => {
-            emit('upload-complete');
-          }, 2000);
-        } catch (error) {
-          console.error('Error completing upload:', error);
-          uploadStatus.value = {
-            type: 'error',
-            message: `Failed to complete upload: ${error.response?.data?.detail || error.message}`
-          };
+      // Manual chunked upload on button click
+      uppy.on('upload', async () => {
+        const files = uppy.getFiles();
+        
+        for (const file of files) {
+          try {
+            uppy.emit('upload-started', file);
+            const uploadId = file.meta.uploadId;
+            const totalChunks = file.meta.totalChunks;
+            const chunkSize = file.meta.chunkSize;
+            
+            // Upload chunks
+            for (let i = 0; i < totalChunks; i++) {
+              const start = i * chunkSize;
+              const end = Math.min(start + chunkSize, file.size);
+              const chunk = file.data.slice(start, end);
+              
+              // Calculate checksum for chunk
+              const reader = new FileReader();
+              const checksum = await new Promise((resolve) => {
+                reader.onload = (e) => {
+                  const wordArray = CryptoJS.lib.WordArray.create(e.target.result);
+                  resolve(CryptoJS.SHA256(wordArray).toString());
+                };
+                reader.readAsArrayBuffer(chunk);
+              });
+              
+              // Upload chunk
+              await uploadService.uploadChunk(
+                uploadId,
+                i,
+                chunk,
+                checksum,
+                file.name,
+                totalChunks
+              );
+              
+              // Update progress
+              const progress = ((i + 1) / totalChunks) * 100;
+              uppy.emit('upload-progress', file, {
+                uploader: uppy,
+                bytesUploaded: end,
+                bytesTotal: file.size
+              });
+            }
+            
+            // Calculate final checksum of entire file
+            const finalChecksumReader = new FileReader();
+            const finalChecksum = await new Promise((resolve) => {
+              finalChecksumReader.onload = (e) => {
+                const wordArray = CryptoJS.lib.WordArray.create(e.target.result);
+                resolve(CryptoJS.SHA256(wordArray).toString());
+              };
+              finalChecksumReader.readAsArrayBuffer(file.data);
+            });
+            
+            // Complete upload
+            await uploadService.completeUpload(uploadId, finalChecksum);
+            
+            uppy.emit('upload-success', file, {});
+            
+            uploadStatus.value = {
+              type: 'success',
+              message: `Successfully uploaded ${file.name}`
+            };
+            
+            // Refresh file list
+            await filesStore.fetchFiles();
+            
+          } catch (error) {
+            console.error('Upload error:', error);
+            uppy.emit('upload-error', file, error);
+            uploadStatus.value = {
+              type: 'error',
+              message: `Upload failed: ${error.response?.data?.detail || error.message}`
+            };
+          }
         }
+        
+        setTimeout(() => {
+          emit('upload-complete');
+        }, 2000);
       });
 
       // Handle upload error
@@ -149,16 +192,6 @@ export default {
           type: 'error',
           message: `Upload failed: ${error.message}`
         };
-      });
-
-      // Handle all uploads complete
-      uppy.on('complete', (result) => {
-        if (result.successful.length > 0) {
-          uploadStatus.value = {
-            type: 'success',
-            message: `Successfully uploaded ${result.successful.length} file(s)`
-          };
-        }
       });
 
       // Handle file removal
@@ -175,7 +208,8 @@ export default {
 
     onBeforeUnmount(() => {
       if (uppy) {
-        uppy.close();
+        uppy.cancelAll();
+        uppy = null;
       }
     });
 

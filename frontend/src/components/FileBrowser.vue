@@ -102,12 +102,13 @@
       </div>
     </div>
 
-    <!-- Upload Dialog - Placeholder -->
+    <!-- Upload Dialog -->
     <div v-if="showUploadDialog" class="modal">
-      <div class="modal-content">
-        <h3>Upload File</h3>
-        <p>Upload functionality will use Uppy.js (to be implemented)</p>
-        <button @click="showUploadDialog = false" class="btn-primary">Close</button>
+      <div class="modal-content upload-modal">
+        <FileUpload 
+          @close="showUploadDialog = false" 
+          @upload-complete="handleUploadComplete"
+        />
       </div>
     </div>
   </div>
@@ -116,6 +117,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useFileStore } from '../stores/files'
+import FileUpload from './FileUpload.vue'
 
 const fileStore = useFileStore()
 
@@ -192,6 +194,11 @@ const deleteFile = async (file) => {
 
 const goToPage = (newPage) => {
   fileStore.setPage(newPage)
+}
+
+const handleUploadComplete = () => {
+  showUploadDialog.value = false
+  fileStore.fetchFiles()
 }
 
 const formatSize = (bytes) => {
@@ -334,5 +341,12 @@ th {
   padding: 2rem;
   border-radius: 8px;
   min-width: 400px;
+}
+
+.upload-modal {
+  min-width: 800px;
+  max-width: 90vw;
+  padding: 0;
+  overflow: hidden;
 }
 </style>

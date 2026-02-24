@@ -32,8 +32,17 @@ const router = createRouter({
 })
 
 // Navigation guard
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
+  
+  // If user has token but no user data, wait for it to load
+  if (authStore.token && !authStore.user) {
+    try {
+      await authStore.fetchCurrentUser()
+    } catch (error) {
+      console.error('Failed to fetch user in navigation guard:', error)
+    }
+  }
   
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next('/login')

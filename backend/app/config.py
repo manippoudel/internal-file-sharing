@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     # Maximum concurrent users
     MAX_CONCURRENT_USERS: int = 15
     
+    # Admin User (Must be set in .env file)
+    ADMIN_EMAIL: str
+    ADMIN_PASSWORD: str
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

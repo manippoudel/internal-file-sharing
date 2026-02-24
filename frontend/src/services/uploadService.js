@@ -16,12 +16,12 @@ class UploadService {
   /**
    * Upload a single chunk
    */
-  async uploadChunk(uploadId, chunkIndex, chunkData) {
+  async uploadChunk(uploadId, chunkIndex, chunkData, checksum, filename, totalChunks) {
     const formData = new FormData();
-    formData.append('chunk', chunkData);
+    formData.append('chunk_file', chunkData);
     
     const response = await api.post(
-      `/files/upload/chunk?upload_id=${uploadId}&chunk_index=${chunkIndex}`,
+      `/files/upload/chunk?upload_id=${uploadId}&chunk_number=${chunkIndex}&checksum=${checksum}&filename=${encodeURIComponent(filename)}&total_chunks=${totalChunks}`,
       formData,
       {
         headers: {
@@ -38,7 +38,7 @@ class UploadService {
   async completeUpload(uploadId, checksum) {
     const response = await api.post('/files/upload/complete', {
       upload_id: uploadId,
-      checksum: checksum
+      final_checksum: checksum
     });
     return response.data;
   }
@@ -47,9 +47,7 @@ class UploadService {
    * Cancel an ongoing upload
    */
   async cancelUpload(uploadId) {
-    const response = await api.post('/files/upload/cancel', {
-      upload_id: uploadId
-    });
+    const response = await api.post(`/files/upload/cancel?upload_id=${uploadId}`);
     return response.data;
   }
 

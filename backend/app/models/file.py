@@ -32,7 +32,7 @@ class File(Base):
     is_deleted = Column(Boolean, default=False, nullable=False, index=True)
     deleted_at = Column(DateTime, nullable=True)
     deleted_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    sync_status = Column(Enum(SyncStatus), default=SyncStatus.PENDING, nullable=False)
+    sync_status = Column(Enum(SyncStatus, values_callable=lambda x: [e.value for e in x]), default=SyncStatus.PENDING, nullable=False)
 
     # Relationships
     uploader = relationship("User", back_populates="uploaded_files", foreign_keys=[uploaded_by])

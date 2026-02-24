@@ -1,6 +1,7 @@
 """APScheduler manager"""
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime
@@ -31,7 +32,22 @@ class SchedulerManager:
         
         logger.info("Initializing APScheduler")
         
-        self.scheduler = AsyncIOScheduler(timezone="UTC")
+        # Configure job stores for persistence
+        jobstores = {
+            'default': SQLAlchemyJobStore(url=settings.DATABASE_URL.replace('asyncpg', 'psycopg2'))
+        }
+        
+        # Configure job defaults
+        job_defaults = {
+            'coalesce': False,
+            'max_instances': 1
+        }
+        
+        self.scheduler = AsyncIOScheduler(
+            jobstores=jobstores,
+            job_defaults=job_defaults,
+            timezone="UTC"
+        )
         
         # Add all scheduled jobs
         
